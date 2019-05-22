@@ -1,0 +1,198 @@
+多态与虚表详解
+
+目录： 
+1、多态 
+2、虚表的内存分布
+多态
+示例一（多态）：
+#include <iostream>
+using namespace std;
+
+class AAA
+{
+public:
+    virtual void OutPut() = 0;
+};
+class BBB:public AAA
+{
+public:
+    void OutPut() { cout << "BBB" << endl; }
+};
+class CCC:public AAA
+{
+public:
+    void OutPut() { cout << "CCC" << endl; }
+};
+class DDD:public AAA
+{
+public:
+    void OutPut() { cout << "DDD" << endl; }
+};
+
+int main()
+{
+    AAA* p[3];
+    p[0] = new BBB;
+    p[1] = new CCC;
+    p[2] = new DDD;
+    for (int i = 0; i < 3; i++) {
+        p[i]->OutPut();
+        delete p[i];
+        p[i] = NULL;
+    }
+    return 0;
+}
+输出结果： 
+BB 
+CC 
+DD
+通过示例一，我们可以大概的了解多态的含义，就是实现了同一个接口，呈现出多种状态。就好似，充电宝上的USB接口，在不同的充电宝中（BBB、CCC、DDD），可能有的是1A的，有的是两A的，有的是4A的，这就是生活中USB接口的多种不同实现。面向对象思想就是提取生活中的实例来抽象这个世界。 
+多态的含义：接口的多种不同实现方式即为多态。
+多态的实现原理？ 
+这里就需要了解虚表（虚函数列表）的实现 
+虚表的含义：每个有虚函数的类或者继承具有虚函数的基类，编译器都会为它生成一个虚拟函数表。虚表中的每一个元素都分别指向一个虚函数的地址。 
+虚表的形成：虚表在编译阶段构造出来的表
+虚表的内存分布
+示例二（虚表）：
+#include <iostream>
+using namespace std;
+
+#define interface struct
+
+interface IX
+{
+    virtual void FX1() = 0;
+    virtual void FX2() = 0;
+};
+
+interface IY
+{
+    virtual void FY1() = 0;
+    virtual void FY2() = 0;
+};
+
+class CCom :public IX, public IY
+{
+public:
+    virtual void FX1() override
+    {
+        cout << "FX1" << endl;
+    }
+
+    virtual void FX2() override
+    {
+        cout << "FX2" << endl;
+    }
+
+    virtual void FY1() override
+    {
+        cout << "FY1" << endl;
+    }
+
+    virtual void FY2() override
+    {
+        cout << "FY2" << endl;
+    }
+
+    int m_Num;
+
+    void OutPutThis()
+    {
+        cout << "this 指针地址：" << hex << this << endl;
+    }
+
+    int ADD(int a, int b)
+    {
+        return a + b;
+    }
+
+    virtual void GetNum(int num)
+    { 
+        m_Num = num; 
+    }
+    virtual void OutPut() 
+    { 
+        printf("%d\n", m_Num);
+    }
+};
+
+int main()
+{
+    CCom* pCom = new CCom;
+    CCom* pCom2 = new CCom;
+    IX* pIX = (IX*)pCom;
+    IY* pIY = (IY*)pCom;
+
+    pCom->OutPutThis();
+    cout << "实例指针 pCom->" << hex << pCom << endl;
+    cout << "虚表指针 pIX->" << hex << pIX << endl;
+    cout << "虚表指针 pIY->" << hex << pIY << endl;
+    pCom->GetNum(10);
+    cout << "类成员变量 m_Num 地址:"<<hex<<&pCom->m_Num << endl;
+
+    cout << endl;
+    printf("CCom 类占据的内存大小:%d\n", sizeof(CCom));
+    cout << "虚表 IX 地址->" << hex << *(int*)pIX << endl;
+    cout << "虚表 IY 地址->" << hex << *(int*)pIY << endl;
+    cout << "成员变量 m_Num ->" << *((int*)pIY + 1) << endl;
+
+    delete pCom;
+    pCom = NULL;
+    return 0;
+}
+运行结果： 
+this 指针地址：003BE380 
+实例指针 pCom->003BE380 
+虚表指针 pIX->003BE380 
+虚表指针 pIY->003BE384 
+类成员变量 m_Num 地址:003BE388
+CCom 类占据的内存大小:12 
+虚表 IX 地址->e0ab58 
+虚表 IY 地址->e0ab70 
+成员变量 m_Num ->a
+分析程序的运行结果： 
+CCom类的大小为12，首地址为0x003BE380（也是pIX的地址），接下来是pIY，接下来是成员变量m_Num地址。我们可以得出类实例的内存分布： 
+0x003BE380 -> this,pIX (虚表指针与实例指针) 
+0x003BE384 -> pIY (pIY虚表指针地址) 
+0x003BE388 -> m_Num (成员变量)
+
+实例地址的内存分布（两个虚表(__vfptr)指针加一个成员变量）： 
+ 
+this、pIX的值为0x00e0ab58，pIY的值为0x00e0ab70，m_Num的值为0x0000000a 
+不难发现：内存中是根据继承书写的先后顺序排布的（依次IX、IY）。
+
+虚表（__vfptr）结构 
+ 
+pIX与pIY分别指向了两个虚表的首地址。虚表中分别存放着我们的虚函数FX1、FX2与FY1、FY2的函数地址，通过该地址访问函数。
+跟进虚表（_vfptr）IX的地址 0x00E0AB58 
+ 
+虚表一有四个虚函数地址，对应着FX1，FX2，GetNum，OutPut函数的地址 
+为什么GetNum与OutPut在虚表一中？ 
+1、子类的虚函数在父类虚函数的末尾，如果有多个虚函数列表，子类的虚函数在第一个虚表的后面 
+2、虚函数是根据声明的顺序放入虚表中的
+
+调用基类纯虚函数的反汇编示例,了解虚函数的调用过程 
+ 
+mov eax,dword ptr [pIX]//取出pIX指针的值 0051E380 （虚表指针的值）存入 EAX 寄存器中 
+mov edx,dword ptr [eax]//取出 EAX 寄存器处的DWORD值 013EAB58 （虚表首地址）存入EDX寄存器 
+mov esi,esp//将栈顶指针存放到ESI寄存器，方便后面进行堆栈溢出检查 
+mov ecx,dword ptr [pIX]//取出pIX指针的值 0051E380 存入 ECX 寄存器中 
+mov eax,dword ptr [edx]//取出 EDX 寄存器处的DWORD值 013E11D1 （虚表中FX1的地址）存入EAX寄存器 
+call eax//调用函数地址为EAX中的DWORD值（013E11D1）处的函数，也就是FX1函数的首地址
+//以下两句为检查栈顶指针以及进行RTC错误动态检查（VS编译器中的优化） 
+cmp esi,esp 
+call __RTC_CheckEsp (013E111DBh)
+
+对比继承的纯虚函数、子类自己的虚函数和普通成员函数的调用过程 
+ 
+1）不难看出，调用基类的纯虚函数（或虚函数）与调用子类自己的汇编实现是在编译时就实现的，在实现过程中均是先取出虚表指针值，然后找到虚表指针所指向虚表的首地址，再在首地址中找到所需要调用的函数的首地址，进行call指令调用 
+2）调用普通的成员函数，直接将数据进行压栈，然后调用成员函数地址即可（成员函数的地址在编译阶段就固定） 
+3）对照反汇编代码，我们可以清楚的看到虚表的调用过程远比调用普通的成员函数复杂，这也是虚表的一个小缺点。 
+注：虚表在编译时就已经形成，同一个类的不同实例使用的是同一张虚表，我们看下我声明两个实例pCom与pCom2的虚表地址 
+
+
+总结下来，类的基本内存分布为以下的形式 
+
+关于类调用函数的过程： 
+调用虚函数：在虚表中查找虚函数地址，然后调用该虚函数 
+调用成员函数：先查找子类自己的成员函数，然后是父类的成员函数
